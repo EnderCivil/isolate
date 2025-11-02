@@ -1,0 +1,657 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Isolate</title>
+<style>
+  :root {
+    --bg:#0f1724; --panel:#0b1220; --muted:#98a0b3; --accent:#7dd3fc;
+    --card:#0f1728; --danger:#ff5c5c; --good:#7ef7a1;
+  }
+  body { font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; background:linear-gradient(180deg,#071023 0%, #071529 100%); color:#e6eef8; margin:0; padding:20px; }
+  .container { max-width:1200px; margin:0 auto; }
+  header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; }
+  h1 { font-size:20px; margin:0; }
+  .muted { color:var(--muted); font-size:13px; }
+  button { background:var(--accent); color:#012; border:0; padding:8px 12px; border-radius:8px; cursor:pointer; font-weight:600; }
+  button.ghost { background:transparent; border:1px solid rgba(255,255,255,0.06); color:var(--accent); }
+  .panel { background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); padding:16px; border-radius:12px; box-shadow: 0 6px 18px rgba(2,6,23,0.6); }
+  .flex { display:flex; gap:12px; }
+  .col { flex:1; }
+  label { display:block; font-size:13px; margin-bottom:6px; color:var(--muted); }
+  input[type=text], input[type=number], select { width:100%; padding:8px; border-radius:8px; border:1px solid rgba(255,255,255,0.04); background:transparent; color:inherit; }
+  .people-list { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; margin-top:12px; }
+  .card { background:var(--card); padding:12px; border-radius:10px; border:1px solid rgba(255,255,255,0.03); position:relative; }
+  .card.snapped { border-color: rgba(255,90,90,0.35); box-shadow:0 6px 20px rgba(255,60,60,0.06); background: linear-gradient(180deg, rgba(120,20,20,0.06), rgba(12,8,8,0.03)); }
+  .stat { font-size:12px; color:var(--muted); display:flex; justify-content:space-between; margin:6px 0; }
+  .big { font-weight:700; font-size:16px; }
+  .log { max-height:300px; overflow:auto; padding:8px; background:rgba(255,255,255,0.02); border-radius:8px; font-size:13px; color:var(--muted); }
+  .grid-2 { display:grid; grid-template-columns:1fr 320px; gap:12px; align-items:start; }
+  .weapons { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+  .weapon { padding:6px 8px; border-radius:8px; background:rgba(255,255,255,0.02); font-size:13px; border:1px solid rgba(255,255,255,0.02); }
+  .hotline { background:#111827; color:#fff; padding:10px 12px; border-radius:10px; display:inline-block; margin-left:8px; }
+  .hotline small { display:block; font-size:12px; color:var(--muted); }
+  .disclaimer { font-size:13px; color:var(--muted); margin-top:8px; }
+  footer { margin-top:12px; color:var(--muted); font-size:13px; }
+  .red { color:var(--danger); font-weight:700; }
+  .green { color:var(--good); font-weight:700; }
+  .mini { font-size:12px; color:var(--muted); }
+  .row { display:flex; gap:8px; align-items:center; }
+  .slider { width:100%; }
+  .attr-matrix { font-size:12px; margin-top:6px; display:flex; flex-direction:column; gap:6px; }
+  .attr-row { display:flex; gap:6px; align-items:center; }
+  .attr-label { width:90px; color:var(--muted); }
+  .dead { opacity:0.45; text-decoration:line-through; }
+  .center { text-align:center; }
+  .big-btn { padding:14px 18px; font-size:15px; border-radius:10px; }
+  .small { font-size:12px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div>
+      <h1>Isolate</h1>
+      <div class="muted">Single-file simulation. Configure characters, then press <strong>Start Game</strong>.</div>
+    </div>
+    <div class="row">
+      <div class="hotline panel" title="Non-callable helpline: shows resources">
+        <div><strong>Help: 116 123</strong></div>
+        <small class="mini">Tap for resources (does NOT call)</small>
+      </div>
+      <button id="toggleDisclaimer" class="ghost">Disclaimer</button>
+    </div>
+  </header>
+
+  <div class="grid-2">
+    <div class="panel" id="configPanel">
+      <h3>Config — Add People & Traits</h3>
+      <div class="row" style="gap:8px; margin-top:8px;">
+        <div style="flex:1;">
+          <label for="nameInput">Name</label>
+          <input id="nameInput" type="text" placeholder="e.g. Thomas" />
+        </div>
+        <div style="width:180px">
+          <label for="preset">Preset Trait</label>
+          <select id="preset">
+            <option value="normal">Normal</option>
+            <option value="sociopath">Sociopath</option>
+            <option value="insane">High Insanity</option>
+            <option value="depressive">Depressive</option>
+            <option value="charmer">Charming</option>
+          </select>
+        </div>
+        <div style="width:120px; display:flex; align-items:end;">
+          <button id="addPerson">Add</button>
+        </div>
+      </div>
+
+      <div class="muted small" style="margin-top:10px;">Add people, then tune sliders on each card before pressing <strong>Start Game</strong>.</div>
+
+      <div id="peopleList" class="people-list" style="margin-top:12px;"></div>
+
+      <div style="margin-top:12px; display:flex; gap:8px;">
+        <button id="startGame" class="big-btn">Start Game</button>
+        <button id="resetGame" class="ghost">Reset</button>
+      </div>
+
+      <div class="disclaimer panel" style="margin-top:12px;">
+        <strong>Safety & Disclaimer</strong>
+        <p class="mini">This simulation may include sensitive content (violence, self-harm). A helpline (116 123) is shown for safety. This is a fictional simulation intended for experimentation; do not attempt to replicate violent behavior in real life. Resources are provided only for informational purposes.</p>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel" id="playPanel" style="display:none;">
+        <div style="display:flex; justify-content:space-between; gap:8px; align-items:center;">
+          <div>
+            <h3 style="margin:0">Game — In Progress</h3>
+            <div class="muted small">Press <strong>New Turn</strong> to advance the simulation. The game ends when all are dead.</div>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button id="newTurn" class="big-btn">New Turn</button>
+            <button id="backToConfig" class="ghost">Back to Config</button>
+          </div>
+        </div>
+
+        <div style="margin-top:12px;" id="cardsWrap"></div>
+
+        <div style="margin-top:12px;">
+          <h4>Event Log</h4>
+          <div id="log" class="log"></div>
+        </div>
+      </div>
+
+      <div class="panel" id="launchPanel" style="display:block;">
+        <h3>Welcome — Preview</h3>
+        <p class="muted">Add people in the left panel. When you press start, each person will get a card. Then press <strong>New Turn</strong> repeatedly.</p>
+
+        <div style="margin-top:8px;">
+          <strong>Weapons</strong>
+          <div class="weapons">
+            <div class="weapon">Spoon — effectiveness 20%</div>
+            <div class="weapon">Fork — effectiveness 40%</div>
+            <div class="weapon">Knife — effectiveness 80%</div>
+            <div class="weapon">Rope — effectiveness 100%</div>
+            <div class="weapon">Gun — effectiveness 100%</div>
+          </div>
+        </div>
+
+        <div style="margin-top:12px;">
+          <strong>Quick mechanics</strong>
+          <ul class="muted small">
+            <li>Insanity: x → chance to snap each turn = (insanity / 5) percent.</li>
+            <li>Attraction: chance to ask out = attraction% each turn. Acceptance chance = targetAttraction * 2.</li>
+            <li>Sadness: increases after rejection; sad/4 chance per turn to become Suicidal.</li>
+            <li>Snapped people try to attack (stab, poison, punch) each turn; victims may die or survive.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="muted">V1.0 — You're running a simulation only. All events are fictional.</footer>
+</div>
+
+<!-- Modal: Hotline / Disclaimer -->
+<div id="modal" style="display:none; position:fixed; inset:0; background:rgba(2,6,23,0.7); align-items:center; justify-content:center;">
+  <div class="panel" style="width:540px; max-width:94%; border-radius:12px;">
+    <h3>Support & Resources</h3>
+    <p class="muted">If you are feeling distressed or thinking about self-harm, please reach out. The number shown (116 123) is an international non-callable resource placeholder in this demo. In a final product please replace with local, verified helpline links.</p>
+    <p><strong>Helpline (display only): 116 123</strong></p>
+    <p class="muted small">This demo will NOT place a call — tapping the number only shows this modal to avoid accidental dialing.</p>
+    <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:8px;">
+      <button id="closeModal" class="ghost">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/*
+  Murder Mystery Simulation V1.0 (Single-file)
+  - Keep code readable and annotated for further extension.
+*/
+
+(function(){
+  // State
+  let people = []; // array of person objects
+  let nextId = 1;
+  let weapons = [
+    { id: 'spoon', name: 'Spoon', effectiveness: 0.2 },
+    { id: 'fork', name: 'Fork', effectiveness: 0.4 },
+    { id: 'knife', name: 'Knife', effectiveness: 0.8 },
+    { id: 'rope', name: 'Rope', effectiveness: 1.0 },
+    { id: 'gun', name: 'Gun', effectiveness: 1.0 },
+  ];
+  const peopleListEl = document.getElementById('peopleList');
+  const addBtn = document.getElementById('addPerson');
+  const presetSelect = document.getElementById('preset');
+  const nameInput = document.getElementById('nameInput');
+  const startBtn = document.getElementById('startGame');
+  const resetBtn = document.getElementById('resetGame');
+  const playPanel = document.getElementById('playPanel');
+  const launchPanel = document.getElementById('launchPanel');
+  const configPanel = document.getElementById('configPanel');
+  const cardsWrap = document.getElementById('cardsWrap');
+  const logEl = document.getElementById('log');
+  const newTurnBtn = document.getElementById('newTurn');
+  const backToConfig = document.getElementById('backToConfig');
+  const modal = document.getElementById('modal');
+  const toggleDisclaimer = document.getElementById('toggleDisclaimer');
+  const hotlineBox = document.querySelector('.hotline');
+
+  // helper
+  function randChance(p) { // p in [0,1]
+    return Math.random() < p;
+  }
+  function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+  function log(msg) {
+    const ts = new Date().toLocaleTimeString();
+    logEl.innerHTML = `<div style="margin-bottom:6px;"><strong>${ts}</strong> — ${msg}</div>` + logEl.innerHTML;
+  }
+
+  // Person model:
+  // {
+  //  id, name, insanity (0-100), sociopath(0-100), sad(0-100),
+  //  suicidal:bool, suicidalChance(0-100) (calculated), health (0-100),
+  //  alive:bool, snapped:bool, weapon:null|string, attraction: {id:percent,...}
+  // }
+  function defaultPerson(name){
+    return {
+      id: nextId++,
+      name: name || `Person ${nextId}`,
+      insanity: 10,
+      sociopath: 0,
+      sad: 0,
+      suicidal: false,
+      health: 100,
+      alive: true,
+      snapped: false,
+      weapon: null,
+      attraction: {}, // will be filled when game starts
+    };
+  }
+
+  // UI: Add person card in config
+  function renderPeopleConfig(){
+    peopleListEl.innerHTML = '';
+    people.forEach(p => {
+      const div = document.createElement('div');
+      div.className = 'card';
+      div.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div class="big">${escapeHtml(p.name)}</div>
+            <div class="mini muted">ID: ${p.id}</div>
+          </div>
+          <div style="display:flex; gap:6px;">
+            <button data-id="${p.id}" class="remove small ghost">Remove</button>
+          </div>
+        </div>
+        <div style="margin-top:8px;">
+          <label>Insanity: <small class="muted">${p.insanity}%</small></label>
+          <input type="range" min="0" max="100" value="${p.insanity}" data-id="${p.id}" data-field="insanity" class="slider" />
+          <label>Sociopath: <small class="muted">${p.sociopath}%</small></label>
+          <input type="range" min="0" max="100" value="${p.sociopath}" data-id="${p.id}" data-field="sociopath" class="slider" />
+          <label>Sad: <small class="muted">${p.sad}%</small></label>
+          <input type="range" min="0" max="100" value="${p.sad}" data-id="${p.id}" data-field="sad" class="slider" />
+        </div>
+      `;
+      peopleListEl.appendChild(div);
+    });
+
+    // attach handlers
+    peopleListEl.querySelectorAll('.remove').forEach(btn => {
+      btn.addEventListener('click', (e)=>{
+        const id = Number(btn.dataset.id);
+        people = people.filter(x=>x.id!==id);
+        renderPeopleConfig();
+      });
+    });
+    peopleListEl.querySelectorAll('.slider').forEach(s=>{
+      s.addEventListener('input', ()=>{
+        const id = Number(s.dataset.id);
+        const field = s.dataset.field;
+        const p = people.find(x=>x.id===id);
+        if(!p) return;
+        p[field] = Number(s.value);
+        renderPeopleConfig(); // re-render to update labels
+      });
+    });
+  }
+
+  // escape HTML helper
+  function escapeHtml(s){ return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
+
+  // add person from config
+  addBtn.addEventListener('click', ()=>{
+    const preset = presetSelect.value;
+    const name = nameInput.value.trim() || `Person ${nextId}`;
+    const p = defaultPerson(name);
+    // apply preset
+    if(preset === 'sociopath'){
+      p.sociopath = 80; p.insanity = 55; p.sad = 5;
+    } else if(preset === 'insane'){
+      p.insanity = 80; p.sad = 30;
+    } else if(preset === 'depressive'){
+      p.sad = 60; p.insanity = 20;
+    } else if(preset === 'charmer'){
+      p.sad = 5; p.insanity = 5; p.sociopath = 10;
+    } // normal => defaults
+    people.push(p);
+    nameInput.value = '';
+    renderPeopleConfig();
+  });
+
+  // start game
+  startBtn.addEventListener('click', ()=>{
+    if(people.length < 1) { alert('Add at least one person.'); return; }
+    // initialize attractions map
+    people.forEach(p=>{
+      p.attraction = {};
+      people.forEach(o=>{
+        if(o.id === p.id) return;
+        // small random base attraction to make social interactions interesting
+        p.attraction[o.id] = Math.floor(Math.random()*20); // 0-19%
+      });
+      p.alive = true; p.health = 100; p.snapped = false; p.weapon = null; p.suicidal = false;
+    });
+    // Show play panel
+    launchPanel.style.display = 'none';
+    playPanel.style.display = 'block';
+    configPanel.style.display = 'none';
+    renderCards();
+    logEl.innerHTML = '';
+    log('Simulation started.');
+  });
+
+  backToConfig.addEventListener('click', ()=>{
+    playPanel.style.display = 'none';
+    launchPanel.style.display = 'block';
+    configPanel.style.display = 'block';
+  });
+
+  resetBtn.addEventListener('click', ()=>{
+    if(!confirm('Reset simulation and remove all people?')) return;
+    people = [];
+    nextId = 1;
+    renderPeopleConfig();
+    logEl.innerHTML = '';
+    launchPanel.style.display = 'block';
+    playPanel.style.display = 'none';
+    configPanel.style.display = 'block';
+  });
+
+  // render cards in play mode
+  function renderCards(){
+    cardsWrap.innerHTML = '';
+    people.forEach(p=>{
+      const card = document.createElement('div');
+      card.className = 'card' + (p.snapped ? ' snapped' : '');
+      if(!p.alive) card.classList.add('dead');
+      const attractionList = Object.entries(p.attraction).map(([id, val])=>{
+        const other = people.find(x=>x.id==id);
+        return `<div class="attr-row"><div class="attr-label">${escapeHtml(other.name)}</div><div>${val}%</div></div>`;
+      }).join('');
+      card.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div class="big">${escapeHtml(p.name)} ${p.snapped ? '<span class="red">[SNAPPED]</span>':''}</div>
+            <div class="mini muted">ID: ${p.id} ${!p.alive?'<span class="muted">— dead</span>':''}</div>
+          </div>
+          <div style="text-align:right">
+            <div class="mini">Health: <strong>${p.health}</strong></div>
+            <div class="mini">Weapon: <strong>${p.weapon?escapeHtml(p.weapon):'—'}</strong></div>
+          </div>
+        </div>
+        <div style="margin-top:8px;">
+          <div class="stat"><div class="muted">Insanity</div><div>${p.insanity}%</div></div>
+          <div class="stat"><div class="muted">Sad</div><div>${p.sad}%</div></div>
+          <div class="stat"><div class="muted">Sociopath</div><div>${p.sociopath}%</div></div>
+          <div class="stat"><div class="muted">Suicidal</div><div>${p.suicidal ? '<span class="red">Yes</span>' : 'No'}</div></div>
+          <div class="attr-matrix">
+            ${attractionList || '<div class="muted">No other people</div>'}
+          </div>
+        </div>
+      `;
+      cardsWrap.appendChild(card);
+    });
+  }
+
+  // simulate one turn
+  newTurnBtn.addEventListener('click', ()=>{
+    if(people.length===0) return;
+    advanceTurn();
+    renderCards();
+    checkGameOver();
+  });
+
+  // Core game logic per turn (simplified but faithful to requested mechanics)
+  function advanceTurn(){
+    // Copy current alive list for decisions
+    const alive = people.filter(p=>p.alive);
+    if(alive.length === 0) { log('All people are dead.'); return; }
+
+    // 1) For each alive, check snapping based on insanity
+    // Insanity defined: chance to snap per turn = insanity/5 percent.
+    const newlySnapped = [];
+    alive.forEach(p=>{
+      if(p.snapped || !p.alive) return;
+      const snapChance = (p.insanity / 5) / 100; // e.g. insanity 55 => 0.11
+      if(randChance(snapChance)){
+        p.snapped = true;
+        newlySnapped.push(p);
+        log(`${p.name} has snapped. Their card turns red and they become violent.`);
+      }
+    });
+
+    // 2) Snapped people try to find weapons (if they don't have) and attack 1-2 targets
+    newlySnapped.forEach(p=>{
+      if(!p.weapon){
+        // find a random weapon from world (simple): 60% chance to pick a useful weapon > spoon
+        if(randChance(0.8)){
+          // pick random
+          const w = weapons[Math.floor(Math.random()*weapons.length)];
+          p.weapon = w.name;
+          log(`${p.name} found a ${w.name}.`);
+        } else {
+          // may find nothing
+          log(`${p.name} prowls and finds nothing useful.`);
+        }
+      }
+    });
+
+    // Attacks by all currently snapped (including newly snapped)
+    const snappedList = people.filter(p=>p.alive && p.snapped);
+    snappedList.forEach(attacker=>{
+      // decide number of attacks: 1 or 2
+      const attacks = Math.random() < 0.4 ? 2 : 1;
+      for(let i=0;i<attacks;i++){
+        // pick random target among alive others
+        const targets = people.filter(x=>x.alive && x.id !== attacker.id);
+        if(targets.length===0) break;
+        const target = targets[Math.floor(Math.random()*targets.length)];
+        // If attacker has weapon, use its effectiveness
+        const w = weapons.find(w=>w.name === attacker.weapon) || {name: attacker.weapon || 'fists', effectiveness: 0.25};
+        // If sociopath increases willingness to be violent slightly
+        const baseSuccess = w.effectiveness || 0.25;
+        const successModifier = (attacker.sociopath/200); // up to 0.5 bonus
+        const successProb = clamp(baseSuccess + successModifier, 0, 1);
+        if(randChance(successProb)){
+          // kill target
+          target.alive = false;
+          target.health = 0;
+          log(`${attacker.name} ${attacker.weapon ? 'stabbed' : 'attacked'} ${target.name} with a ${w.name}. ${target.name} bled out and died.`);
+          // spread negative attraction via rumor: those who hear about attacker drop attraction
+          spreadRumor(attacker, target, true);
+        } else {
+          // failed attack => victim survives but injured
+          target.health = Math.max(50, target.health - Math.floor(20 + Math.random()*30));
+          log(`${attacker.name} attacked ${target.name} with a ${w.name}, but ${target.name} managed to escape and survive (health ${target.health}).`);
+          // victim's attraction to attacker becomes -100
+          setAttraction(target.id, attacker.id, -100);
+          spreadRumor(attacker, target, false);
+        }
+      }
+    });
+
+    // 3) Non-snapped interactions (attraction asks, talking)
+    const aliveNow = people.filter(p=>p.alive);
+    // attraction asks
+    aliveNow.forEach(p=>{
+      // for each person p might feel attraction toward multiple people
+      Object.entries(p.attraction).forEach(([targetIdStr, val])=>{
+        const targetId = Number(targetIdStr);
+        const target = people.find(x=>x.id === targetId && x.alive);
+        if(!target) return;
+        const askChance = clamp(val / 100, 0, 1); // val% chance to ask
+        if(randChance(askChance)){
+          // ask out
+          const targetAttrToP = (target.attraction && target.attraction[p.id]) ? target.attraction[p.id] : 0;
+          const acceptChance = clamp((targetAttrToP * 2)/100, 0, 1); // as per rules
+          if(randChance(acceptChance)){
+            // success
+            // increase both's attraction a bit
+            p.attraction[targetId] = clamp(p.attraction[targetId] + 10, -100, 200);
+            target.attraction[p.id] = clamp(target.attraction[p.id] + 10, -100, 200);
+            log(`${p.name} asked ${target.name} out. ${target.name} accepted! Attraction increased.`);
+          } else {
+            // rejection
+            p.sad = clamp(p.sad + 75, 0, 100);
+            log(`${p.name} asked ${target.name} out and was rejected. ${p.name} is very sad (+75 Sad).`);
+            // sad -> chance of suicidal
+            const suicidalChance = clamp((p.sad / 4) / 100, 0, 1);
+            if(!p.suicidal && randChance(suicidalChance)){
+              p.suicidal = true;
+              log(`${p.name} has become suicidal.`);
+            }
+          }
+        }
+      });
+    });
+
+    // 4) Suicidal people may attempt suicide
+    const suicidalPeople = people.filter(p=>p.alive && p.suicidal);
+    suicidalPeople.forEach(p=>{
+      // chance to attempt this turn: use sad% / 100 * 0.15 roughly (tuneable)
+      const attemptChance = clamp((p.sad / 100) * 0.15 + 0.02, 0, 1);
+      if(randChance(attemptChance)){
+        // if they have or can find a weapon, use it for self-harm, else choose other methods
+        let method = null;
+        // prefer rope/gun/knife options if found
+        const preferred = weapons.find(w=>['rope','gun','knife'].includes(w.id));
+        // if they possess a weapon, use it
+        const ownedWeaponObj = weapons.find(w => w.name === p.weapon);
+        let usedWeapon = ownedWeaponObj || (preferred && Math.random() < 0.6 ? preferred : null);
+        if(usedWeapon){
+          // check effectiveness (if 1.0 => guaranteed)
+          const success = randChance(usedWeapon.effectiveness);
+          if(success){
+            p.alive = false; p.health = 0;
+            log(`${p.name} ${usedWeapon.id === 'gun' ? 'shot themselves' : 'slit their throat'} with a ${usedWeapon.name}. They died.`);
+          } else {
+            p.health = Math.max(0, p.health - Math.floor(10 + Math.random()*40));
+            p.suicidal = true; // still suicidal
+            log(`${p.name} attempted suicide using a ${usedWeapon.name}, but survived. They are injured (health ${p.health}).`);
+          }
+        } else {
+          // non-weapon methods: balcony, hanging, drowning, overdose (some are always successful as per spec)
+          // choose one following the spec probabilities
+          const methods = [
+            {name:'balcony', successProb:0.5, textSuccess: 'found a balcony and threw themselves off it', textFail: 'They were hardly injured.'},
+            {name:'hang', successProb:1.0, textSuccess: 'hung themselves', textFail: ''},
+            {name:'drown', successProb:0.8, textSuccess: 'sunk themselves into the water', textFail: 'They struggled but survived.'},
+            {name:'overdose', successProb:1.0, textSuccess: 'overdosed, seemingly on purpose', textFail: ''},
+          ];
+          const choice = methods[Math.floor(Math.random()*methods.length)];
+          if(randChance(choice.successProb)){
+            p.alive = false; p.health = 0;
+            log(`${p.name} ${choice.textSuccess}.`);
+          } else {
+            log(`${p.name} ${choice.textFail} They survived.`);
+            p.health = Math.max(10, p.health - 30);
+            p.suicidal = true;
+          }
+        }
+      }
+    });
+
+    // 5) Non-snapped random talks reduce suicidal by 20% when someone talks to a suicidal person
+    aliveNow.forEach(a=>{
+      // 20% chance to talk to someone
+      if(randChance(0.2)){
+        const others = people.filter(x=>x.alive && x.id !== a.id);
+        if(others.length===0) return;
+        const partner = others[Math.floor(Math.random()*others.length)];
+        // if partner is suicidal reduce their chance (we implement as reduce 'sad' by 20% points)
+        if(partner.suicidal){
+          partner.sad = clamp(partner.sad - 20, 0, 100);
+          // if suicidal drops under threshold (we'll treat 10% as cancel)
+          const suicidalThreshold = 10;
+          if(partner.sad <= suicidalThreshold){
+            partner.suicidal = false;
+            partner.sad = 5; // as user specified: suicidal goes away and sad set to 5%
+            log(`${a.name} talked to ${partner.name}. ${partner.name}'s suicidal feelings decreased and they are no longer suicidal.`);
+          } else {
+            log(`${a.name} talked to ${partner.name}. ${partner.name}'s sadness decreased a little.`);
+          }
+        }
+      }
+    });
+
+    // 6) Decay/increase stats for isolated players: if someone is alone (only alive) their insanity and sadness go up a lot
+    const aliveCount = people.filter(p=>p.alive).length;
+    if(aliveCount === 1){
+      const sole = people.find(p=>p.alive);
+      sole.insanity = clamp(sole.insanity + 15, 0, 100);
+      sole.sad = clamp(sole.sad + 20, 0, 100);
+      log(`${sole.name} is alone. Insanity and Sadness rose sharply.`);
+    }
+
+    // minor drifting of stats per turn
+    people.forEach(p=>{
+      if(!p.alive) return;
+      // small natural entropy
+      p.insanity = clamp(p.insanity + (Math.random()*2 - 1), 0, 100);
+      p.sad = clamp(p.sad + (Math.random()*2 - 1), 0, 100);
+    });
+  }
+
+  // spread rumor: after attack, others talked about it and change attraction
+  function spreadRumor(attacker, victim, killed){
+    // choose some random people who hear about it
+    const others = people.filter(p => p.alive && p.id !== attacker.id && p.id !== victim.id);
+    const sampleCount = Math.min(3, others.length);
+    for(let i=0;i<sampleCount;i++){
+      const r = others[Math.floor(Math.random()*others.length)];
+      // if it was a kill, attraction to attacker drops more
+      if(killed){
+        const prev = r.attraction[attacker.id] || 0;
+        r.attraction[attacker.id] = clamp(prev - 40, -100, 200);
+        log(`${r.name} heard that ${attacker.name} killed ${victim.name}. ${r.name}'s opinion of ${attacker.name} worsened.`);
+      } else {
+        // attempted murder rumor: attraction drops moderately
+        const prev = r.attraction[attacker.id] || 0;
+        r.attraction[attacker.id] = clamp(prev - 25, -100, 200);
+        log(`${r.name} heard about an attack by ${attacker.name}. Attraction to them decreased.`);
+      }
+    }
+  }
+
+  // set attraction utility (handles negative attraction special behavior)
+  function setAttraction(fromId, toId, value){
+    const from = people.find(x=>x.id===fromId);
+    if(!from) return;
+    from.attraction[toId] = value;
+    if(value < 0){
+      // people with negative attraction will often tell others (spread)
+      const targets = people.filter(p=>p.alive && p.id !== fromId && p.id !== toId);
+      targets.forEach(t=>{
+        t.attraction[toId] = clamp((t.attraction[toId] || 0) - 10, -100, 200);
+      });
+    }
+  }
+
+  // check end condition
+  function checkGameOver(){
+    const alive = people.filter(p=>p.alive);
+    if(alive.length === 0){
+      log('All characters are dead. Simulation ended.');
+      alert('GAME OVER — All characters are dead. Check the log for details.');
+      playPanel.style.display = 'none';
+      launchPanel.style.display = 'block';
+      configPanel.style.display = 'block';
+    }
+  }
+
+  // Modal handlers
+  hotlineBox.addEventListener('click', ()=> {
+    modal.style.display = 'flex';
+  });
+  toggleDisclaimer.addEventListener('click', ()=> {
+    modal.style.display = 'flex';
+  });
+  document.getElementById('closeModal').addEventListener('click', ()=> {
+    modal.style.display = 'none';
+  });
+
+  // initial render
+  renderPeopleConfig();
+
+  // small keyboard shortcut: N => new turn
+  document.addEventListener('keydown', (e)=>{
+    if(e.key.toLowerCase() === 'n' && playPanel.style.display === 'block'){
+      newTurnBtn.click();
+    }
+  });
+
+  // expose to console for debugging
+  window._mmsim = {
+    getState: ()=>({people, weapons}),
+    setPeople: (arr) => { people = arr; renderPeopleConfig(); },
+  };
+})();
+</script>
+</body>
+</html>
